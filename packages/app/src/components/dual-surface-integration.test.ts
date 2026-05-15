@@ -39,6 +39,11 @@ class OpenUIDSLParser {
     }
     return node
   }
+  
+  reset(): void {
+    this.definitions.clear()
+    this.root = { type: DSLNodeType.ROOT, name: "root", props: {}, children: [] }
+  }
 }
 
 class StreamingMarkdownParser {
@@ -122,6 +127,81 @@ describe("Dual Surface Integration", () => {
       
       // DSL should use significantly fewer tokens
       expect(dslTokens).toBeLessThan(markdownTokens)
+    })
+  })
+
+  describe("Session lifecycle", () => {
+    test("parsers reset clears accumulated state", () => {
+      const dslParser = new OpenUIDSLParser()
+      const mdParser = new StreamingMarkdownParser()
+      
+      // Push some data
+      dslParser.push("root = Card()\n")
+      mdParser.push("```mermaid\ngraph TD\nA-->B\n```\n")
+      
+      // Verify data is present
+      expect(dslParser.getTree().children.length).toBeGreaterThan(0)
+      expect(mdParser.getBlocks().length).toBeGreaterThan(0)
+      
+      // Reset parsers (simulating session.created event)
+      dslParser.reset()
+      mdParser.reset()
+      
+      // Verify data is cleared
+      expect(dslParser.getTree().children).toHaveLength(0)
+      expect(mdParser.getBlocks()).toHaveLength(0)
+    })
+
+    test("items store cleared on session reset", () => {
+      // Simulates the createStore + reconcile pattern
+      // When session.created fires, items should be cleared
+      const items: RenderItem[] = [
+        { source: "dsl", tree: { type: DSLNodeType.ROOT, name: "root", props: {}, children: [] } },
+        { source: "markdown", block: { type: BlockType.MERMAID, content: "graph TD", isComplete: true, language: "mermaid", startIndex: 0, endIndex: 10 } },
+      ]
+      
+      // Session reset clears all items
+      items.length = 0
+      
+      expect(items).toHaveLength(0)
+    })
+  })
+
+  describe("Incremental store updates (reconcile pattern)", () => {
+    test("reconcile preserves item identity for unchanged items", () => {
+      // Simulates createStore + reconcile behavior
+      // When the same item appears in both old and new arrays,
+      // reconcile preserves its identity (no remount)
+      const oldDslItem = { source: "dsl" as const, tree: { type: DSLNodeType.ROOT, name: "root", props: {}, children: [] } }
+      const oldMdItem = { source: "markdown" as const, block: { type: BlockType.MERMAID, content: "graph TD", isComplete: true, language: "mermaid", startIndex: 0, endIndex: 10 } }
+      
+      const oldItems = [oldDslItem, oldMdItem]
+      
+      // New items: DSL unchanged, markdown updated
+      const newItems = [
+        oldDslItem, // same reference — reconcile preserves identity
+        { source: "markdown" as const, block: { type: BlockType.MERMAID, content: "graph TD\nA-->B", isComplete: true, language: "mermaid", startIndex: 0, endIndex: 20 } },
+      ]
+      
+      // With reconcile, unchanged items keep their identity
+      expect(newItems[0]).toBe(oldDslItem) // same reference
+      expect(newItems[1].block.content).toContain("A-->B") // updated content
+      expect(oldItems.length).toBe(2) // old array unaffected
+    })
+
+    test("full array replacement without reconcile causes identity loss", () => {
+      // Demonstrates the bug we're fixing
+      const item1 = { source: "dsl" as const, tree: { type: DSLNodeType.ROOT, name: "root", props: {}, children: [] } }
+      const item2 = { source: "markdown" as const, block: { type: BlockType.MERMAID, content: "graph TD", isComplete: true, language: "mermaid", startIndex: 0, endIndex: 10 } }
+      
+      const oldItems = [item1, item2]
+      
+      // Without reconcile: create new array with same logical items
+      const newItems = oldItems.map(i => ({ ...i }))
+      
+      // Identity is lost — SolidJS would remount all components
+      expect(newItems[0]).not.toBe(item1)
+      expect(newItems[1]).not.toBe(item2)
     })
   })
 

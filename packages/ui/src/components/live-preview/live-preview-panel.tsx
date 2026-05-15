@@ -1,5 +1,8 @@
 import { Component, Show, For } from "solid-js"
 import { MermaidRenderer } from "./mermaid-renderer"
+import { EChartsRenderer } from "./echarts-renderer"
+import { HtmlSandbox } from "./html-sandbox"
+import { ReactRenderer } from "./react-renderer"
 import { Card } from "@opencode-ai/ui/card"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -61,13 +64,13 @@ export const LivePreviewPanel: Component<LivePreviewPanelProps> = (props) => {
                     <MermaidRenderer content={block.content} isComplete={block.isComplete} />
                   </Show>
                   <Show when={block.type === BlockType.ECHARTS}>
-                    <div class="live-preview-placeholder">ECharts rendering coming soon...</div>
+                    <EChartsRenderer content={block.content} isComplete={block.isComplete} />
                   </Show>
                   <Show when={block.type === BlockType.REACT}>
-                    <div class="live-preview-placeholder">React component rendering coming soon...</div>
+                    <ReactRenderer content={block.content} isComplete={block.isComplete} />
                   </Show>
                   <Show when={block.type === BlockType.HTML}>
-                    <div class="live-preview-placeholder">HTML rendering coming soon...</div>
+                    <HtmlSandbox content={block.content} isComplete={block.isComplete} />
                   </Show>
                   <Show when={block.type === BlockType.UNKNOWN}>
                     <div class="live-preview-placeholder">Unknown block type</div>

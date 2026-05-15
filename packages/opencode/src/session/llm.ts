@@ -1,8 +1,7 @@
 import { Provider } from "@/provider/provider"
 import { createOpenCodeLibrary } from "@/parser/opencode-library"
 import * as Log from "@opencode-ai/core/util/log"
-import { Context, Effect, Layer, Record } from "effect"
-import * as Stream from "effect/Stream"
+import { Context, Effect, Layer, Record, Stream } from "effect"
 import { streamText, wrapLanguageModel, type ModelMessage, type Tool, tool, jsonSchema } from "ai"
 import { mergeDeep } from "remeda"
 import { GitLabWorkflowLanguageModel } from "gitlab-ai-provider"
@@ -15,6 +14,9 @@ import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Permission } from "@/permission"
 import { PermissionID } from "@/permission/schema"
+
+// Cached DSL component library prompt for UI generation
+const DSL_COMPONENT_PROMPT = createOpenCodeLibrary().generatePrompt()
 import { Bus } from "@/bus"
 import { Wildcard } from "@/util/wildcard"
 import { SessionID } from "@/session/schema"
@@ -121,8 +123,8 @@ const live: Layer.Layer<
         { sessionID: input.sessionID, model: input.model },
         { system },
       )
-      // Inject DSL component library prompt for UI generation
-      system.push(createOpenCodeLibrary().generatePrompt())
+      // Inject DSL component library prompt for UI generation (cached)
+      system.push(DSL_COMPONENT_PROMPT)
 
       // rejoin to maintain 2-part structure for caching if header unchanged
       if (system.length > 2 && system[0] === header) {
