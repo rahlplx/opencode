@@ -1,0 +1,42 @@
+{
+  "editor": {
+    "targetFps": 60,
+    "minimumFps": 55,
+    "maxRenderTimeMs": 16,
+    "description": "Editor must maintain 60fps during typing and scrolling"
+  },
+  "canvas": {
+    "targetFps": 30,
+    "minimumFps": 25,
+    "maxRenderTimeMs": 33,
+    "description": "Canvas must maintain 30fps during diagram rendering"
+  },
+  "mermaid": {
+    "simpleDiagram": {
+      "maxRenderTimeMs": 100,
+      "description": "Simple flowchart (< 10 nodes) must render in < 100ms"
+    },
+    "complexDiagram": {
+      "maxRenderTimeMs": 500,
+      "description": "Complex diagram (< 50 nodes) must render in < 500ms"
+    },
+    "streamingUpdate": {
+      "maxRenderTimeMs": 50,
+      "description": "Incremental update during streaming must take < 50ms"
+    }
+  },
+  "parser": {
+    "streamingChunk": {
+      "maxParseTimeMs": 5,
+      "description": "Parsing each streaming chunk must take < 5ms"
+    },
+    "fullDocument": {
+      "maxParseTimeMs": 50,
+      "description": "Parsing full document must take < 50ms"
+    }
+  },
+  "ipc": {
+    "messageLatencyMs": 10,
+    "description": "IPC message latency must be < 10ms"
+  }
+}
