@@ -1,74 +1,138 @@
-import { Component, createSignal, createEffect, onCleanup } from "solid-js"
+import { Component, createSignal, createEffect, onCleanup, For, Show } from "solid-js"
+import { OpenUIDSLParser, DSLNode, DSLNodeType } from "@opencode-ai/opencode/parser/openui-dsl-parser"
 import { StreamingMarkdownParser, BlockType, ParsedBlock } from "@opencode-ai/opencode/parser/streaming-markdown-parser"
-import { LivePreviewPanel } from "@opencode-ai/ui/live-preview/live-preview-panel"
 import { useSDK } from "@/context/sdk"
 import { useSettings } from "@/context/settings"
+import { Card } from "@opencode-ai/ui/card"
+import { Spinner } from "@opencode-ai/ui/spinner"
 
-// Integration hook that connects parser to AI streaming
-export function useStreamingParser() {
-  const [blocks, setBlocks] = createSignal<ParsedBlock[]>([])
+// Type for renderable items from either parser
+export type RenderItem = 
+  | { source: "dsl"; tree: DSLNode }
+  | { source: "markdown"; block: ParsedBlock }
+
+export function useDualSurfaceParser() {
+  const [items, setItems] = createSignal<RenderItem[]>([])
   const [isVisible, setIsVisible] = createSignal(false)
-  const parser = new StreamingMarkdownParser()
+  
+  const dslParser = new OpenUIDSLParser()
+  const mdParser = new StreamingMarkdownParser()
 
-  // Connect to AI streaming response
   const { sdk } = useSDK()
   const { settings } = useSettings()
 
-  // Process streaming chunks
   const processChunk = (chunk: string) => {
-    parser.push(chunk)
-    const currentBlocks = parser.getBlocks()
+    const currentItems: RenderItem[] = []
     
-    // Only show panel if we have renderable blocks
-    const renderableBlocks = currentBlocks.filter(block => 
-      block.type !== BlockType.UNKNOWN
-    )
+    // Try DSL parser first (token-efficient line-oriented format)
+    const oldTree = dslParser.getTree()
+    dslParser.push(chunk)
+    const newTree = dslParser.getTree()
+    if (newTree.children.length > 0) {
+      currentItems.push({ source: "dsl", tree: newTree })
+    }
     
-    if (renderableBlocks.length > 0 && !isVisible()) {
+    // Fallback: detect markdown code fences
+    mdParser.push(chunk)
+    const blocks = mdParser.getBlocks()
+    for (const block of blocks) {
+      if (block.type !== BlockType.UNKNOWN) {
+        currentItems.push({ source: "markdown", block })
+      }
+    }
+    
+    if (currentItems.length > 0 && !isVisible()) {
       setIsVisible(true)
     }
     
-    setBlocks(renderableBlocks)
+    setItems(currentItems)
   }
 
-  // Subscribe to AI streaming
   createEffect(() => {
     if (!sdk) return
-
-    // This would hook into the actual streaming response
-    // For now, we'll set up the subscription pattern
     const subscription = sdk.sessions.onStreamingResponse?.(processChunk)
-    
-    onCleanup(() => {
-      subscription?.unsubscribe()
-    })
+    onCleanup(() => subscription?.unsubscribe())
   })
 
   const togglePanel = () => setIsVisible(!isVisible())
   const resizePanel = (width: number) => {
-    // Store panel width in settings
     settings?.set("previewPanelWidth", width)
   }
 
-  return {
-    blocks,
-    isVisible,
-    togglePanel,
-    resizePanel,
-    processChunk, // Exposed for testing
-  }
+  return { items, isVisible, togglePanel, resizePanel, processChunk }
 }
 
-// Integration component that wires everything together
+// DSL Tree Renderer - renders structure progressively
+const DSLTreeRenderer: Component<{ tree: DSLNode }> = (props) => {
+  const renderNode = (node: DSLNode, depth: number = 0): any => {
+    if (node.type === DSLNodeType.ROOT && node.children.length > 0) {
+      return node.children.map(child => renderNode(child, depth))
+    }
+    
+    return (
+      <Card class="dsl-component" style={`margin-left: ${depth * 12}px`}>
+        <div class="dsl-component-header">
+          <span class="dsl-component-name">{node.name}</span>
+          <Show when={Object.keys(node.props).length > 0}>
+            <span class="dsl-component-props">
+              {JSON.stringify(node.props)}
+            </span>
+          </Show>
+        </div>
+        <Show when={node.children.length > 0}>
+          <div class="dsl-component-children">
+            {node.children.map(child => renderNode(child, depth + 1))}
+          </div>
+        </Show>
+      </Card>
+    )
+  }
+  
+  return <div class="dsl-tree">{renderNode(props.tree)}</div>
+}
+
+// Legacy Block Renderer - fallback for markdown code fences
+const LegacyBlockRenderer: Component<{ block: ParsedBlock }> = (props) => {
+  const blockLabel = () => {
+    switch (props.block.type) {
+      case BlockType.MERMAID: return "Mermaid Diagram"
+      case BlockType.ECHARTS: return "Chart"
+      case BlockType.REACT: return "React Component"
+      case BlockType.HTML: return "HTML"
+      default: return "Code Block"
+    }
+  }
+  
+  return (
+    <Card class="legacy-block">
+      <div class="legacy-block-header">
+        <span class="legacy-block-type">{blockLabel()}</span>
+        <Show when={!props.block.isComplete}>
+          <Spinner />
+        </Show>
+      </div>
+      <pre class="legacy-block-content">{props.block.content}</pre>
+    </Card>
+  )
+}
+
 export const DualSurfaceIntegration: Component = () => {
-  const { blocks, isVisible, togglePanel, resizePanel } = useStreamingParser()
+  const { items, isVisible, togglePanel, resizePanel } = useDualSurfaceParser()
 
   return (
-    <LivePreviewPanel
-      blocks={blocks()}
-      isVisible={isVisible()}
-      onToggle={togglePanel}
-      onResize={resizePanel}
-    />
+    <div class="dual-surface-integration">
+      {/* DSL tree renders structure-first */}
+      <For each={items().filter(i => i.source === "dsl")}>
+        {(item) => (
+          <DSLTreeRenderer tree={item.tree} />
+        )}
+      </For>
+      {/* Fallback: render detected code fences */}
+      <For each={items().filter(i => i.source === "markdown")}>
+        {(item) => (
+          <LegacyBlockRenderer block={item.block} />
+        )}
+      </For>
+    </div>
   )
 }
