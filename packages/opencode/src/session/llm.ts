@@ -1,4 +1,5 @@
 import { Provider } from "@/provider/provider"
+import { createOpenCodeLibrary } from "@/parser/opencode-library"
 import * as Log from "@opencode-ai/core/util/log"
 import { Context, Effect, Layer, Record } from "effect"
 import * as Stream from "effect/Stream"
@@ -120,6 +121,9 @@ const live: Layer.Layer<
         { sessionID: input.sessionID, model: input.model },
         { system },
       )
+      // Inject DSL component library prompt for UI generation
+      system.push(createOpenCodeLibrary().generatePrompt())
+
       // rejoin to maintain 2-part structure for caching if header unchanged
       if (system.length > 2 && system[0] === header) {
         const rest = system.slice(1)

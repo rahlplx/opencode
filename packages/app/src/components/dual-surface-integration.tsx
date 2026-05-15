@@ -1,14 +1,21 @@
 import { Component, createSignal, createEffect, onCleanup, For, Show } from "solid-js"
 import { OpenUIDSLParser, DSLNode, DSLNodeType } from "@opencode-ai/opencode/parser/openui-dsl-parser"
 import { StreamingMarkdownParser, BlockType, ParsedBlock } from "@opencode-ai/opencode/parser/streaming-markdown-parser"
-import { useSDK } from "@/context/sdk"
-import { useSettings } from "@/context/settings"
+import { DSLRenderer } from "@opencode-ai/opencode/parser/dsl-renderer"
+import { createOpenCodeLibrary } from "@opencode-ai/opencode/parser/opencode-library"
+import { DSLRendererComponent, type RenderPlanItem } from "@opencode-ai/ui/live-preview/dsl-renderer-component"
 import { Card } from "@opencode-ai/ui/card"
 import { Spinner } from "@opencode-ai/ui/spinner"
+import { useSDK } from "@/context/sdk"
+import { useSettings } from "@/context/settings"
+
+// Shared renderer instance (singleton)
+const registry = createOpenCodeLibrary()
+const dslRenderer = new DSLRenderer(registry)
 
 // Type for renderable items from either parser
 export type RenderItem = 
-  | { source: "dsl"; tree: DSLNode }
+  | { source: "dsl"; plan: RenderPlanItem[] }
   | { source: "markdown"; block: ParsedBlock }
 
 export function useDualSurfaceParser() {
@@ -25,11 +32,14 @@ export function useDualSurfaceParser() {
     const currentItems: RenderItem[] = []
     
     // Try DSL parser first (token-efficient line-oriented format)
-    const oldTree = dslParser.getTree()
     dslParser.push(chunk)
     const newTree = dslParser.getTree()
     if (newTree.children.length > 0) {
-      currentItems.push({ source: "dsl", tree: newTree })
+      // Convert DSL tree to render plan using the component registry
+      const plan = dslRenderer.generateRenderPlan(newTree)
+      if (plan.length > 0) {
+        currentItems.push({ source: "dsl", plan })
+      }
     }
     
     // Fallback: detect markdown code fences
@@ -59,36 +69,7 @@ export function useDualSurfaceParser() {
     settings?.set("previewPanelWidth", width)
   }
 
-  return { items, isVisible, togglePanel, resizePanel, processChunk }
-}
-
-// DSL Tree Renderer - renders structure progressively
-const DSLTreeRenderer: Component<{ tree: DSLNode }> = (props) => {
-  const renderNode = (node: DSLNode, depth: number = 0): any => {
-    if (node.type === DSLNodeType.ROOT && node.children.length > 0) {
-      return node.children.map(child => renderNode(child, depth))
-    }
-    
-    return (
-      <Card class="dsl-component" style={`margin-left: ${depth * 12}px`}>
-        <div class="dsl-component-header">
-          <span class="dsl-component-name">{node.name}</span>
-          <Show when={Object.keys(node.props).length > 0}>
-            <span class="dsl-component-props">
-              {JSON.stringify(node.props)}
-            </span>
-          </Show>
-        </div>
-        <Show when={node.children.length > 0}>
-          <div class="dsl-component-children">
-            {node.children.map(child => renderNode(child, depth + 1))}
-          </div>
-        </Show>
-      </Card>
-    )
-  }
-  
-  return <div class="dsl-tree">{renderNode(props.tree)}</div>
+  return { items, isVisible, togglePanel, resizePanel, processChunk, registry }
 }
 
 // Legacy Block Renderer - fallback for markdown code fences
@@ -121,18 +102,20 @@ export const DualSurfaceIntegration: Component = () => {
 
   return (
     <div class="dual-surface-integration">
-      {/* DSL tree renders structure-first */}
-      <For each={items().filter(i => i.source === "dsl")}>
-        {(item) => (
-          <DSLTreeRenderer tree={item.tree} />
-        )}
-      </For>
-      {/* Fallback: render detected code fences */}
-      <For each={items().filter(i => i.source === "markdown")}>
-        {(item) => (
-          <LegacyBlockRenderer block={item.block} />
-        )}
-      </For>
+      <Show when={isVisible}>
+        {/* DSL renders actual SolidJS components */}
+        <For each={items().filter((i): i is Extract<RenderItem, { source: "dsl" }> => i.source === "dsl")}>
+          {(item) => (
+            <DSLRendererComponent plan={item.plan} />
+          )}
+        </For>
+        {/* Fallback: render detected code fences */}
+        <For each={items().filter((i): i is Extract<RenderItem, { source: "markdown" }> => i.source === "markdown")}>
+          {(item) => (
+            <LegacyBlockRenderer block={item.block} />
+          )}
+        </For>
+      </Show>
     </div>
   )
 }
