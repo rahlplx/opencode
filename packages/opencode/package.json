@@ -20,7 +20,8 @@
     "opencode": "./bin/opencode"
   },
   "exports": {
-    "./*": "./src/*.ts"
+    "./*": "./src/*.ts",
+    "./parser/*": "./src/parser/*.ts"
   },
   "imports": {
     "#db": {

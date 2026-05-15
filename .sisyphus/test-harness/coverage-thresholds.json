@@ -1,0 +1,35 @@
+{
+  "modules": {
+    "streaming-markdown-parser": {
+      "lineCoverage": 95,
+      "branchCoverage": 90,
+      "functionCoverage": 95
+    },
+    "block-type-registry": {
+      "lineCoverage": 95,
+      "branchCoverage": 90,
+      "functionCoverage": 95
+    },
+    "mermaid-renderer": {
+      "lineCoverage": 90,
+      "branchCoverage": 85,
+      "functionCoverage": 90
+    },
+    "live-preview-panel": {
+      "lineCoverage": 90,
+      "branchCoverage": 85,
+      "functionCoverage": 90
+    },
+    "monaco-editor": {
+      "lineCoverage": 85,
+      "branchCoverage": 80,
+      "functionCoverage": 85
+    }
+  },
+  "globalThresholds": {
+    "lineCoverage": 90,
+    "branchCoverage": 85,
+    "functionCoverage": 90,
+    "mutationScore": 80
+  }
+}
